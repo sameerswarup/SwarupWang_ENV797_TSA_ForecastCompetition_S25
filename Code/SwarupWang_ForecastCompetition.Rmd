@@ -1,0 +1,39 @@
+---
+title: "SwarupWang_ForecastCompetition"
+author: "Lucy Wang"
+date: "2025-03-31"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+```
+## Data Wrangling
+
+Transform the hourly data into daily data
+```{r}
+load_df <- read_excel("./Data/load.xlsx")
+  
+daily_load <- load_df %>% 
+  group_by(meter_id, date) %>%
+  summarize(
+    daily_avg = mean(c_across(1:24), na.rm = TRUE),
+    .groups   = "drop"
+  )
+```
+
+## Create a Time Series Object
+
+After processing your dataset, use the msts() function to create a time series object. You need to use msts() instead of ts() because your daily data has more than one seasonal component.
+
+```{r pressure, echo=FALSE}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
