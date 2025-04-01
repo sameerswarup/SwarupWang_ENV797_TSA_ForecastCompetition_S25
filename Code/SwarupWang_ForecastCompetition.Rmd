@@ -7,6 +7,8 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "/Users/sameerswarup/Documents/Duke MEM Classes/Spring 2025/Time Series Analysis for Energy/RStudio Outputs/Forecasting_Competition")
+
 ```
 
 ```{r}
@@ -19,7 +21,9 @@ library(tidyr)
 Transform the hourly data into daily data
 ```{r}
 load_df <- read_excel("./Data/load.xlsx")
-  
+humidity_df <- read_excel("./Data/relative_humidity.xlsx")
+temp_df <- read_excel("./Data/temperature.xlsx")
+
 daily_load <- load_df %>% 
   group_by(meter_id, date) %>%
   summarize(
