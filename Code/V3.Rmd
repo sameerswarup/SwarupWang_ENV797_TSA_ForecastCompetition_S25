@@ -238,11 +238,11 @@ For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is 
 NN_fit <- nnetar(ts_load_train,
                  p=1,
                  P=0,
-                 xreg=fourier(ts_load_train, K=c(2,6)))
+                 xreg=fourier(ts_load_train, K=c(2,4)))
 
 #NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, h=365,xreg=fourier(ts_load_train, 
-                                          K=c(2,6),h=365))
+                                          K=c(2,4),h=365))
 
 #Plot foresting results
 autoplot(NN_for) +
@@ -360,16 +360,16 @@ TBATS_result <- as.data.frame(TBATS_for$mean)
 print(TBATS_result)
 ```
 
-## Forecasting using NN with K=c(2,6)
+## Forecasting using NN with K=c(2,4)
 ```{r}
 NN_fit <- nnetar(load_ts,
                  p=1,
                  P=0,
-                 xreg=fourier(load_ts, K=c(2,6)))
+                 xreg=fourier(load_ts, K=c(2,4)))
 
 #NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, h=59,xreg=fourier(load_ts, 
-                                          K=c(2,6),h=59))
+                                          K=c(2,4),h=59))
 
 NN_result <- as.data.frame(NN_for$mean)
 print(NN_result)
