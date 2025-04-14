@@ -144,7 +144,8 @@ autoplot(ETS_fit) + ylab("Load")
 #Plot model + observed data
 autoplot(load_ts) +
   autolayer(ETS_fit, series="STL + ETS",PI=FALSE) +
-  ylab("Load")
+  ylab("Load")+
+  theme_minimal()
 
 
 #alternative coding if you don't need to save the objects
@@ -165,14 +166,14 @@ ARIMA_Four_fit <- auto.arima(ts_load_train,
                              seasonal=FALSE, 
                              lambda=0,
                              xreg=fourier(ts_load_train, 
-                                          K=c(2,8))
+                                          K=c(2,6))
                              )
 
 #Forecast with ARIMA fit
 #also need to specify h for fourier terms
 ARIMA_Four_for <- forecast(ARIMA_Four_fit,
                            xreg=fourier(ts_load_train,
-                                        K=c(2,8),
+                                        K=c(2,6),
                                         h=365),
                            h=365
                            ) 
@@ -183,8 +184,12 @@ autoplot(ARIMA_Four_for) + ylab("Load")
 #Plot model + observed data
 autoplot(load_ts) +
   autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
-  ylab("Load")
+  ylab("Load")+
+  theme_minimal()
 
+# Accuracy test
+ARIMA_scores <- accuracy(ARIMA_Four_for$mean,ts_load_test)
+ARIMA_scores
 ```
 ### Model 3: TBATS
 
@@ -207,6 +212,9 @@ autoplot(load_ts) +
   autolayer(TBATS_for, series="TBATS",PI=FALSE)+
   ylab("Load") 
 
+# Accuracy check
+TBATS_scores <- accuracy(TBATS_for$mean,ts_load_test)
+TBATS_scores
 ```
 
 ### Model 4: Neural Network Time Series Forecasts
@@ -230,11 +238,11 @@ For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is 
 NN_fit <- nnetar(ts_load_train,
                  p=1,
                  P=0,
-                 xreg=fourier(ts_load_train, K=c(2,8)))
+                 xreg=fourier(ts_load_train, K=c(2,6)))
 
 #NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, h=365,xreg=fourier(ts_load_train, 
-                                          K=c(2,8),h=365))
+                                          K=c(2,6),h=365))
 
 #Plot foresting results
 autoplot(NN_for) +
@@ -245,6 +253,9 @@ autoplot(load_ts) +
   autolayer(NN_for, series="Neural Network",PI=FALSE)+
   ylab("Load") 
 
+#Accuracy check
+NN_scores <- accuracy(NN_for$mean,ts_load_test)
+NN_scores
 ```
 
 ## Checking accuracy of the fo models
@@ -349,17 +360,16 @@ TBATS_result <- as.data.frame(TBATS_for$mean)
 print(TBATS_result)
 ```
 
-## Forecasting using NN
+## Forecasting using NN with K=c(2,6)
 ```{r}
-#NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
 NN_fit <- nnetar(load_ts,
                  p=1,
                  P=0,
-                 xreg=fourier(load_ts, K=c(2,8)))
+                 xreg=fourier(load_ts, K=c(2,6)))
 
 #NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, h=59,xreg=fourier(load_ts, 
-                                          K=c(2,8),h=59))
+                                          K=c(2,6),h=59))
 
 NN_result <- as.data.frame(NN_for$mean)
 print(NN_result)
