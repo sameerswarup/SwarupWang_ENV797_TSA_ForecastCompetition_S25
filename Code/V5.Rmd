@@ -93,7 +93,7 @@ pacf(diff_load_series, main = "PACF of Differenced Series")
 
 ```{r}
 # Create time series for differenced load series
-load_ts <- msts(daily_temp$daily_avg, 
+load_ts <- msts(daily_load$daily_avg, 
                 seasonal.periods =c(7,365.25), 
                 start=c(2005,1,1))
 
@@ -291,7 +291,7 @@ autoplot(load_ts) +
   ylab("Load") 
 
 #Accuracy check
-NN_scores <- accuracy(NN_for$mean,ts_load_test)
+NN_scores <- accuracy(NN_for$mean,load_test)
 NN_scores
 ```
 
@@ -308,25 +308,43 @@ future_regressors_nn <- cbind(fourier(ts_diff_load_train, K=c(2,4), h=length(loa
                            ts_humidity_test)
 
 #NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
-NN__w_temp_humid_fit <- nnetar(ts_diff_load_train,
+NN_w_temp_humid_fit <- nnetar(ts_diff_load_train,
                  p=7,
                  P=1,
                  xreg=fourier(ts_diff_load_train, K=c(2,4)))
 
 #NN_for <- forecast(NN_fit, h=365) 
-NN__w_temp_humid_for <- forecast(NN__w_temp_humid_fit, h=365,xreg=fourier(ts_diff_load_train, 
+NN_w_temp_humid_for <- forecast(NN__w_temp_humid_fit, h=365,xreg=fourier(ts_diff_load_train, 
                                           K=c(2,4),h=365))
 
 #Plot foresting results
-autoplot(NN__w_temp_humid_for) +
+autoplot(NN_w_temp_humid_for) +
   ylab("Load") 
 
 #Plot model + observed data
 autoplot(load_ts) +
-  autolayer(NN__w_temp_humid_for, series="Neural Network",PI=FALSE)+
+  autolayer(NN_w_temp_humid_for, series="Neural Network",PI=FALSE)+
   ylab("Load") 
 
 #Accuracy check
-NN_w_temp_humid_scores <- accuracy(NN__w_temp_humid_for$mean,ts_load_test)
+NN_w_temp_humid_scores <- accuracy(NN_w_temp_humid_for$mean, load_test)
 NN_w_temp_humid_scores
 ```
+
+Forecast and print out results from Model 5
+```{r}
+h_future <- 59
+
+NN_w_temp_humid_fit <- nnetar(load_ts,
+                 p=7,
+                 P=1,
+                 xreg=fourier(load_ts, K=c(2,4)))
+
+# Forecast for h_future days (2011)
+NN_w_temp_humid_for <- forecast(NN_w_temp_humid_fit, h=h_future,xreg=fourier(load_ts, 
+                                          K=c(2,4),h=h_future))
+
+NN_result <- as.data.frame(NN_w_temp_humid_for$mean)
+print(NN_result)
+```
+
