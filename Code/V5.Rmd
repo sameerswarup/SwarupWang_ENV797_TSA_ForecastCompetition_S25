@@ -83,17 +83,21 @@ par(mfrow=c(1,1))
 ACF plot shows slow decay, which is a sign of non-stationarity. Proceed with differencing to test this.
 
 ```{r}
-diff_series <- diff(daily_load$daily_avg, differences = 1)
-plot(diff_series, type = "l", main = "Differenced Series")
-acf(diff_series, main = "ACF of Differenced Series")
-pacf(diff_series, main = "PACF of Differenced Series")
+diff_load_series <- diff(daily_load$daily_avg, differences = 1)
+plot(diff_load_series, type = "l", main = "Differenced Series")
+acf(diff_load_series, main = "ACF of Differenced Series")
+pacf(diff_load_series, main = "PACF of Differenced Series")
 
 ```
 
 
 ```{r}
-# Create time series for load 
-load_ts <- msts(daily_load$daily_avg, 
+# Create time series for differenced load series
+load_ts <- msts(daily_temp$daily_avg, 
+                seasonal.periods =c(7,365.25), 
+                start=c(2005,1,1))
+
+diff_load_ts <- msts(diff_load_series, 
                 seasonal.periods =c(7,365.25), 
                 start=c(2005,1,1))
 
@@ -106,4 +110,107 @@ temp_ts <- msts(daily_temp$daily_avg,
 humidity_ts <- msts(daily_humidity$daily_avg, 
                 seasonal.periods =c(7,365.25), 
                 start=c(2005,1,1))
+```
+
+## Decomposing time series objects
+```{r}
+load_ts %>% mstl() %>%
+  autoplot()
+
+diff_load_ts %>% mstl() %>%
+  autoplot()
+
+temp_ts %>% mstl() %>%
+  autoplot()
+
+humidity_ts %>% mstl() %>%
+  autoplot()
+```
+
+## Creating test and training datasets 
+```{r}
+#create a subset for training purpose
+n_for = 365
+ts_diff_load_train <- subset(diff_load_ts,
+                        end = length(diff_load_ts)-n_for)
+
+#create a subset for testing purpose
+load_test <- tail(load_ts, 365)
+
+ts_temp_train <- subset(temp_ts,
+                        end = length(temp_ts)-n_for)
+
+ts_temp_test <- subset(temp_ts,
+                       start = length(temp_ts)-n_for)
+
+ts_humidity_train <- subset(humidity_ts,
+                        end = length(humidity_ts)-n_for)
+
+ts_humidity_test <- subset(humidity_ts,
+                       start = length(humidity_ts)-n_for)
+
+```
+
+### Model 1: STL + ETS
+
+```{r ETS, echo=TRUE, message=FALSE, warning=FALSE}
+#Fit and forecast STL + ETS model to data
+ETS_fit <-  stlf(ts_diff_load_train,h=365)
+
+#Plot foresting results
+autoplot(ETS_fit) + ylab("Load")
+
+#Plot model + observed data
+autoplot(load_ts) +
+  autolayer(ETS_fit, series="STL + ETS",PI=FALSE) +
+  ylab("Load")+
+  theme_minimal()
+
+# Reconstruct forecasted levels
+# 1. Get the last observed value from the ORIGINAL training data (before differencing)
+last_observed <- tail(load_ts, n = length(ts_diff_load_train) + 1)[length(ts_diff_load_train)]
+
+# 2. Get the forecasted differenced values from your model
+forecast_diff <- ETS_fit$mean
+
+# 3. Undifference: Reconstruct the level forecast
+forecast_levels <- cumsum(c(last_observed, forecast_diff))[-1]
+
+# 4. Now compare to the original (non-differenced) test set
+accuracy(forecast_levels, load_test)  # assuming load_test is original-level test data
+
+
+```
+
+### Model 2: ARIMA + FOURIER terms
+
+```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
+ARIMA_Four_fit <- auto.arima(ts_diff_load_train, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                             xreg=fourier(ts_diff_load_train, 
+                                          K=c(2,6))
+                             )
+
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMA_Four_for <- forecast(ARIMA_Four_fit,
+                           xreg=fourier(ts_diff_load_train,
+                                        K=c(2,6),
+                                        h=365),
+                           h=365
+                           ) 
+
+#Plot foresting results
+autoplot(ARIMA_Four_for) + ylab("Load")
+
+#Plot model + observed data
+autoplot(load_ts) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
+  ylab("Load")+
+  theme_minimal()
+
+# Accuracy test
+ARIMA_scores <- accuracy(ARIMA_Four_for$mean,ts_load_test)
+ARIMA_scores
 ```
