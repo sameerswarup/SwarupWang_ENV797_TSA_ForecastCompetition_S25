@@ -266,3 +266,67 @@ ARIMA_Env_scores <- accuracy(ARIMA_Env_for$mean, load_test)
 ARIMA_Env_scores
 ```
 
+### Model 4: Neural Network Time Series Forecasts
+
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+#You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
+
+#NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
+NN_fit <- nnetar(ts_diff_load_train,
+                 p=7,
+                 P=1,
+                 xreg=fourier(ts_diff_load_train, K=c(2,4)))
+
+#NN_for <- forecast(NN_fit, h=365) 
+NN_for <- forecast(NN_fit, h=365,xreg=fourier(ts_diff_load_train, 
+                                          K=c(2,4),h=365))
+
+#Plot foresting results
+autoplot(NN_for) +
+  ylab("Load") 
+
+#Plot model + observed data
+autoplot(load_ts) +
+  autolayer(NN_for, series="Neural Network",PI=FALSE)+
+  ylab("Load") 
+
+#Accuracy check
+NN_scores <- accuracy(NN_for$mean,ts_load_test)
+NN_scores
+```
+
+### Model 5: Neural Network Time Series Forecasts with temperature and humidity
+
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+train_regressors <- cbind(fourier(ts_diff_load_train, K=c(2,4)),
+                          ts_temp_train_subset,
+                          ts_humidity_train_subset)
+
+# Create future regressors for the forecast period
+future_regressors_nn <- cbind(fourier(ts_diff_load_train, K=c(2,4), h=length(load_test)),
+                           ts_temp_test,
+                           ts_humidity_test)
+
+#NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
+NN__w_temp_humid_fit <- nnetar(ts_diff_load_train,
+                 p=7,
+                 P=1,
+                 xreg=fourier(ts_diff_load_train, K=c(2,4)))
+
+#NN_for <- forecast(NN_fit, h=365) 
+NN__w_temp_humid_for <- forecast(NN__w_temp_humid_fit, h=365,xreg=fourier(ts_diff_load_train, 
+                                          K=c(2,4),h=365))
+
+#Plot foresting results
+autoplot(NN__w_temp_humid_for) +
+  ylab("Load") 
+
+#Plot model + observed data
+autoplot(load_ts) +
+  autolayer(NN__w_temp_humid_for, series="Neural Network",PI=FALSE)+
+  ylab("Load") 
+
+#Accuracy check
+NN_w_temp_humid_scores <- accuracy(NN__w_temp_humid_for$mean,ts_load_test)
+NN_w_temp_humid_scores
+```
