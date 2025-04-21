@@ -171,13 +171,13 @@ autoplot(load_ts) +
 last_observed <- tail(load_ts, n = length(ts_diff_load_train) + 1)[length(ts_diff_load_train)]
 
 # 2. Get the forecasted differenced values from your model
-forecast_diff <- ETS_fit$mean
+STL_forecast_diff <- ETS_fit$mean
 
 # 3. Undifference: Reconstruct the level forecast
-forecast_levels <- cumsum(c(last_observed, forecast_diff))[-1]
+STL_forecast_levels <- cumsum(c(last_observed, STL_forecast_diff))[-1]
 
 # 4. Now compare to the original (non-differenced) test set
-accuracy(forecast_levels, load_test)  # assuming load_test is original-level test data
+accuracy(STL_forecast_levels, load_test)
 
 
 ```
@@ -201,7 +201,15 @@ ARIMA_Four_for <- forecast(ARIMA_Four_fit,
                            h=365
                            ) 
 
-#Plot foresting results
+#Plot forecasting results
+autoplot(ARIMA_Four_for) + ylab("Load")
+
+#Plot model + observed data
+autoplot(load_ts) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
+  ylab("Load")+
+  theme_minimal()
+#Plot forecasting results
 autoplot(ARIMA_Four_for) + ylab("Load")
 
 #Plot model + observed data
@@ -210,7 +218,51 @@ autoplot(load_ts) +
   ylab("Load")+
   theme_minimal()
 
-# Accuracy test
-ARIMA_scores <- accuracy(ARIMA_Four_for$mean,ts_load_test)
+# Accuracy test using the direct forecast
+ARIMA_scores <- accuracy(ARIMA_Four_for$mean, load_test)
 ARIMA_scores
 ```
+
+### Model 3: ARIMA + Fourier (with temperature and humidity)
+```{r}
+# Combine Fourier terms, temperature, and humidity for training
+ts_temp_train_subset <- ts_temp_train[1:length(ts_diff_load_train)]
+ts_humidity_train_subset <- ts_humidity_train[1:length(ts_diff_load_train)]
+
+# Combine Fourier terms, temperature, and humidity for training
+train_regressors <- cbind(fourier(ts_diff_load_train, K=c(2,6)),
+                          ts_temp_train_subset,
+                          ts_humidity_train_subset)
+
+ARIMA_Env_fit <- auto.arima(ts_diff_load_train,
+                             seasonal=FALSE,
+                             lambda=0,
+                             xreg=train_regressors)
+
+ts_temp_test <- ts_temp_test[1:length(load_test)]
+ts_humidity_test <- ts_humidity_test[1:length(load_test)]
+
+# Create future regressors for the forecast period
+future_regressors <- cbind(fourier(ts_diff_load_train, K=c(2,6), h=length(load_test)),
+                           ts_temp_test,
+                           ts_humidity_test)
+
+# Forecast with ARIMA fit, including future regressors
+ARIMA_Env_for <- forecast(ARIMA_Env_fit,
+                           xreg=future_regressors,
+                           h=length(load_test))
+
+# Plot forecasting results
+autoplot(ARIMA_Env_for) + ylab("Load")
+
+# Plot model + observed data
+autoplot(load_ts) +
+  autolayer(ARIMA_Env_for, series="ARIMA_ENV", PI=FALSE) +
+  ylab("Load")+
+  theme_minimal()
+
+# Accuracy test against load_test
+ARIMA_Env_scores <- accuracy(ARIMA_Env_for$mean, load_test)
+ARIMA_Env_scores
+```
+
