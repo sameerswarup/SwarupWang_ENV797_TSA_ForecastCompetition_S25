@@ -1,0 +1,24 @@
+---
+title: "V5.Rmd"
+author: "Sameer"
+date: "2025-04-21"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(forecast)  
+library(Kendall)
+library(tseries)
+library(smooth)
+library(zoo)
+library(kableExtra)
+```
