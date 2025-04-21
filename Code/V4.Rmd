@@ -174,10 +174,6 @@ autoplot(load_ts) +
 ### Model 2: ARIMA + FOURIER terms
 
 ```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
-#Fit arima model with fourier terms as exogenous regressors
-# seasonal = FALSE is the same as P=D=Q=0
-# play with K by changing it to K=c(2,2), K=c(2,4), K=c(2,6), etc. The higher the K the longer it will take to converge, because R will try more models.
-
 ARIMA_Four_fit <- auto.arima(ts_load_train, 
                              seasonal=FALSE, 
                              lambda=0,
@@ -209,10 +205,6 @@ ARIMA_scores
 ```
 ### Model 3: TBATS
 
-BATS is Exponential smoothing state space model with **B**ox-Cox transformation, **A**RMA errors, **T**rend and **S**easonal components.
-TBATS is a trigonometric seasonal variation of BATS.
-A Box Cox transformation is a transformation of non-normal dependent variables into a normal shape.
-
 ```{r TBATS train, echo=TRUE, message=FALSE, warning=FALSE}
 # TBATS can take time to fit
 TBATS_fit <- tbats(ts_load_train)
@@ -235,18 +227,6 @@ TBATS_scores
 
 ### Model 4: Neural Network Time Series Forecasts
 
-There is a function in package `forecast` called `nnetar()` that will fit a feed-forward neural networks model to a time series.
-
-A feed-forward neural network is fitted with lagged values of the series as inputs.
-The inputs are for lags 1 to p, and lags s to sP where `s=frequency(y)`.
-If xreg is provided, its columns are also used as inputs.
-The network is trained for one-step forecasting.
-Multi-step forecasts are computed recursively.
-
-For non-seasonal data, the fitted model is denoted as an NNAR(p,k) model, where k is the number of hidden nodes.
-This is analogous to an AR(p) model but with nonlinear functions.
-For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is analogous to an ARIMA(p,0,0)(P,0,0)[s] model but with nonlinear functions.
-
 ```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
 #You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
 
@@ -254,11 +234,11 @@ For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is 
 NN_fit <- nnetar(ts_load_train,
                  p=7,
                  P=1,
-                 xreg=fourier(ts_load_train, K=c(2,2)))
+                 xreg=fourier(ts_load_train, K=c(2,4)))
 
 #NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, h=365,xreg=fourier(ts_load_train, 
-                                          K=c(2,2),h=365))
+                                          K=c(2,4),h=365))
 
 #Plot foresting results
 autoplot(NN_for) +
@@ -274,7 +254,7 @@ NN_scores <- accuracy(NN_for$mean,ts_load_test)
 NN_scores
 ```
 
-## Checking accuracy of the fo models
+## Checking accuracy of the of models
 
 ```{r}
 
