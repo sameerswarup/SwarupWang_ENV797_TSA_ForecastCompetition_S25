@@ -22,3 +22,88 @@ library(smooth)
 library(zoo)
 library(kableExtra)
 ```
+
+# Data Wrangling
+
+Transform the hourly data into daily data:
+
+Cleaned Dataframes: daily_load, daily temp, daily_humidity
+
+```{r}
+# Load the demand excel file
+load_df <- read_excel("../Data/load.xlsx")
+  
+daily_load <- load_df %>% 
+  group_by(meter_id, date) %>%
+  summarize(
+    daily_avg = mean(c_across(1:24), na.rm = TRUE),
+    .groups   = "drop"
+  )
+
+# Load the temperature file
+temp_df <- read_excel("../Data/temperature.xlsx")
+
+daily_temp <- temp_df[1:3] %>% 
+  group_by(date) %>%
+  summarize(
+    daily_avg = mean(t_ws1, na.rm = TRUE),
+    .groups   = "drop"
+  )
+
+# Load the humidity file
+humidity_df <- read_excel("../Data/relative_humidity.xlsx")
+
+daily_humidity <- humidity_df[1:3] %>% 
+  group_by(date) %>%
+  summarize(
+    daily_avg = mean(rh_ws1, na.rm = TRUE),
+    .groups   = "drop"
+  )
+
+daily_temp_for <- read.csv("../Data/Temp_Forecast.csv") 
+temp_for <- msts(daily_temp_for$x, seasonal.periods =c(7,365.25), start=c(2011,1,1))
+
+daily_humidity_for <- read.csv("../Data/Humidity_Forecast.csv") 
+humidity_for <- msts(daily_humidity_for$x, seasonal.periods =c(7,365.25), start=c(2011,1,1))
+```
+
+```{r}
+TS_Plot <- 
+  ggplot(daily_load, aes(x=date, y=daily_avg)) +
+      geom_line()
+plot(TS_Plot)
+
+#ACF and PACF plots
+par(mfrow=c(1,2))
+ACF_Plot <- Acf(daily_load$daily_avg, lag = 40, plot = TRUE)
+PACF_Plot <- Pacf(daily_load$daily_avg, lag = 40)
+par(mfrow=c(1,1))
+```
+
+ACF plot shows slow decay, which is a sign of non-stationarity. Proceed with differencing to test this.
+
+```{r}
+diff_series <- diff(daily_load$daily_avg, differences = 1)
+plot(diff_series, type = "l", main = "Differenced Series")
+acf(diff_series, main = "ACF of Differenced Series")
+pacf(diff_series, main = "PACF of Differenced Series")
+
+```
+
+
+```{r}
+# Create time series for load 
+load_ts <- msts(daily_load$daily_avg, 
+                seasonal.periods =c(7,365.25), 
+                start=c(2005,1,1))
+
+# Create time series for temperature 
+temp_ts <- msts(daily_temp$daily_avg, 
+                seasonal.periods =c(7,365.25), 
+                start=c(2005,1,1))
+
+# Create time series for humidity
+humidity_ts <- msts(daily_humidity$daily_avg, 
+                seasonal.periods =c(7,365.25), 
+                start=c(2005,1,1))
+```
