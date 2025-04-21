@@ -36,7 +36,7 @@ load_df <- read_excel("../Data/load.xlsx")
 daily_load <- load_df %>% 
   group_by(meter_id, date) %>%
   summarize(
-    daily_avg = mean(c_across(1:24), na.rm = TRUE),
+    daily_load_avg = mean(c_across(1:24), na.rm = TRUE),
     .groups   = "drop"
   )
 
@@ -46,7 +46,7 @@ temp_df <- read_excel("../Data/temperature.xlsx")
 daily_temp <- temp_df[1:3] %>% 
   group_by(date) %>%
   summarize(
-    daily_avg = mean(t_ws1, na.rm = TRUE),
+    daily_temp_avg = mean(t_ws1, na.rm = TRUE),
     .groups   = "drop"
   )
 
@@ -56,7 +56,7 @@ humidity_df <- read_excel("../Data/relative_humidity.xlsx")
 daily_humidity <- humidity_df[1:3] %>% 
   group_by(date) %>%
   summarize(
-    daily_avg = mean(rh_ws1, na.rm = TRUE),
+    daily_hum_avg = mean(rh_ws1, na.rm = TRUE),
     .groups   = "drop"
   )
 
@@ -81,6 +81,19 @@ par(mfrow=c(1,1))
 ```
 
 ACF plot shows slow decay, which is a sign of non-stationarity. Proceed with differencing to test this.
+
+Next, we plot temperature and humidity against load
+```{r}
+daily_all_avg <- daily_load %>%
+                 left_join(daily_temp, by = "date") %>%
+                 left_join(daily_humidity, by = "date")
+
+#plot the dataset
+ggplot(data = daily_all_avg, aes(x=daily_temp_avg, y = daily_load_avg)) +
+              geom_point() +
+              geom_smooth(method = lm)
+```
+
 
 ```{r}
 diff_load_series <- diff(daily_load$daily_avg, differences = 1)
@@ -143,11 +156,15 @@ ts_temp_train <- subset(temp_ts,
 ts_temp_test <- subset(temp_ts,
                        start = length(temp_ts)-n_for)
 
+ts_temp_test <- ts_temp_test[1:length(load_test)]
+
 ts_humidity_train <- subset(humidity_ts,
                         end = length(humidity_ts)-n_for)
 
 ts_humidity_test <- subset(humidity_ts,
                        start = length(humidity_ts)-n_for)
+
+ts_humidity_test <- ts_humidity_test[1:length(load_test)]
 
 ```
 
@@ -269,41 +286,43 @@ ARIMA_Env_scores
 ### Model 4: Neural Network Time Series Forecasts
 
 ```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
-#You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
+h_future <- 59
+K <- c(2, 4) # Define K for consistency
 
-#NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
 NN_fit <- nnetar(ts_diff_load_train,
-                 p=7,
-                 P=1,
-                 xreg=fourier(ts_diff_load_train, K=c(2,4)))
+                  p=7,
+                  P=1,
+                  xreg=fourier(ts_diff_load_train, K = K))
 
-#NN_for <- forecast(NN_fit, h=365) 
-NN_for <- forecast(NN_fit, h=365,xreg=fourier(ts_diff_load_train, 
-                                          K=c(2,4),h=365))
-
-#Plot foresting results
-autoplot(NN_for) +
-  ylab("Load") 
-
-#Plot model + observed data
-autoplot(load_ts) +
-  autolayer(NN_for, series="Neural Network",PI=FALSE)+
-  ylab("Load") 
+# Forecast for h_future days
+NN_for <- forecast(NN_fit,
+                   h = h_future,
+                   xreg = fourier(load_ts, K = K, h = h_future))
 
 #Accuracy check
 NN_scores <- accuracy(NN_for$mean,load_test)
 NN_scores
+
+#Print out result
+NN_result <- as.data.frame(NN_for$mean)
+print(NN_result)
 ```
 
 ### Model 5: Neural Network Time Series Forecasts with temperature and humidity
 
 ```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
-train_regressors <- cbind(fourier(ts_diff_load_train, K=c(2,4)),
+h_future <- 59
+K=c(2,4)
+
+fourier_train <- fourier(ts_diff_load_train, K = K)
+fourier_future <- fourier(load_ts, K = K, h = h_future)
+
+train_regressors_nn <- cbind(fourier_train,
                           ts_temp_train_subset,
                           ts_humidity_train_subset)
 
 # Create future regressors for the forecast period
-future_regressors_nn <- cbind(fourier(ts_diff_load_train, K=c(2,4), h=length(load_test)),
+future_regressors_nn <- cbind(fourier_future,
                            ts_temp_test,
                            ts_humidity_test)
 
@@ -311,11 +330,12 @@ future_regressors_nn <- cbind(fourier(ts_diff_load_train, K=c(2,4), h=length(loa
 NN_w_temp_humid_fit <- nnetar(ts_diff_load_train,
                  p=7,
                  P=1,
-                 xreg=fourier(ts_diff_load_train, K=c(2,4)))
+                 xreg=train_regressors_nn, K=c(2,4))
 
 #NN_for <- forecast(NN_fit, h=365) 
-NN_w_temp_humid_for <- forecast(NN_w_temp_humid_fit, h=365,xreg=fourier(ts_diff_load_train, 
-                                          K=c(2,4),h=365))
+NN_w_temp_humid_for <- forecast(NN_w_temp_humid_fit, 
+                                xreg=future_regressors_nn, 
+                                h=h_future)
 
 #Plot foresting results
 autoplot(NN_w_temp_humid_for) +
@@ -329,6 +349,21 @@ autoplot(load_ts) +
 #Accuracy check
 NN_w_temp_humid_scores <- accuracy(NN_w_temp_humid_for$mean, load_test)
 NN_w_temp_humid_scores
+```
+
+Forecast and print out results from Model 4
+```{r}
+h_future <- 59
+
+NN_fit <- nnetar(load_ts,
+                 p=7,
+                 P=1,
+                 xreg=fourier(load_ts, K=c(2,4)))
+
+# Forecast for h_future days (2011)
+NN_for <- forecast(NN_fit, h=h_future,xreg=fourier(load_ts, 
+                                          K=c(2,4),h=h_future))
+
 ```
 
 Forecast and print out results from Model 5
@@ -347,4 +382,3 @@ NN_w_temp_humid_for <- forecast(NN_w_temp_humid_fit, h=h_future,xreg=fourier(loa
 NN_result <- as.data.frame(NN_w_temp_humid_for$mean)
 print(NN_result)
 ```
-
