@@ -314,7 +314,7 @@ NN_w_temp_humid_fit <- nnetar(ts_diff_load_train,
                  xreg=fourier(ts_diff_load_train, K=c(2,4)))
 
 #NN_for <- forecast(NN_fit, h=365) 
-NN_w_temp_humid_for <- forecast(NN__w_temp_humid_fit, h=365,xreg=fourier(ts_diff_load_train, 
+NN_w_temp_humid_for <- forecast(NN_w_temp_humid_fit, h=365,xreg=fourier(ts_diff_load_train, 
                                           K=c(2,4),h=365))
 
 #Plot foresting results
