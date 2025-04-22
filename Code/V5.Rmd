@@ -69,7 +69,7 @@ humidity_for <- msts(daily_humidity_for$x, seasonal.periods =c(7,365.25), start=
 
 ```{r}
 TS_Plot <- 
-  ggplot(daily_load, aes(x=date, y=daily_avg)) +
+  ggplot(daily_load, aes(x=date, y=daily_load_avg)) +
       geom_line()
 plot(TS_Plot)
 

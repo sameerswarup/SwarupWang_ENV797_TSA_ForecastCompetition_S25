@@ -9,22 +9,202 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(forecast)  
+library(Kendall)
+library(tseries)
+library(smooth)
+library(zoo)
+library(kableExtra)
 ```
 
-## Including Plots
+# Data Wrangling
 
-You can also embed plots, for example:
+Transform the hourly data into daily data:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+Cleaned Dataframes: daily_load, daily temp, daily_humidity
+
+```{r}
+# Load the demand excel file
+load_df <- read_excel("../Data/load.xlsx")
+  
+daily_load <- load_df %>% 
+  group_by(meter_id, date) %>%
+  summarize(
+    daily_load_avg = mean(c_across(1:24), na.rm = TRUE),
+    .groups   = "drop"
+  )
+
+# Load the temperature file
+temp_df <- read_excel("../Data/temperature.xlsx")
+
+daily_temp <- temp_df[1:3] %>% 
+  group_by(date) %>%
+  summarize(
+    daily_temp_avg = mean(t_ws1, na.rm = TRUE),
+    .groups   = "drop"
+  )
+
+# Load the humidity file
+humidity_df <- read_excel("../Data/relative_humidity.xlsx")
+
+daily_humidity <- humidity_df[1:3] %>% 
+  group_by(date) %>%
+  summarize(
+    daily_hum_avg = mean(rh_ws1, na.rm = TRUE),
+    .groups   = "drop"
+  )
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Next, we plot temperature and humidity against load
+Clear trend with temperature; not so much with humidity
+Proceed with only temperature
+```{r}
+daily_all_avg <- daily_load %>%
+                 left_join(daily_temp, by = "date") %>%
+                 left_join(daily_humidity, by = "date")
+
+#plot the dataset
+ggplot(data = daily_all_avg, aes(x=daily_temp_avg, y = daily_load_avg)) +
+              geom_point() +
+              geom_smooth(method = lm)
+
+ggplot(data = daily_all_avg, aes(x=daily_hum_avg, y = daily_load_avg)) +
+              geom_point() +
+              geom_smooth(method = lm)
+```
+
+Plot load and temperature individually to determine seasonality
+```{r}
+load_plot <- 
+  ggplot(daily_load, aes(x=date, y=daily_load_avg)) +
+      geom_line()
+plot(load_plot)
+
+temp_plot <- 
+  ggplot(daily_temp, aes(x=date, y=daily_temp_avg)) +
+      geom_line()
+plot(temp_plot)
+```
+
+```{r}
+# Create time series for load series
+load_ts <- msts(daily_load$daily_load_avg, 
+                seasonal.periods =c(7,365.25), 
+                start=c(2005,1,1))
+
+# Create time series for temperature 
+#temp_ts <- msts(daily_temp$daily_temp_avg, 
+                #seasonal.periods =c(7,365.25), 
+                #start=c(2005,1,1))
+
+temp_ts <- ts(daily_temp$daily_temp_avg,
+              frequency = 365.25, # Approximate frequency for yearly data
+              start = c(2005, 1))
+```
+
+Look at ACF plots for load and temp
+```{r}
+ACF_load_Plot <- Acf(daily_load$daily_load_avg, lag = 40, plot = TRUE)
+ACF_temp_Plot <- Acf(daily_temp$daily_temp_avg, lag = 40)
+```
+
+
+## Decomposing time series objects
+```{r}
+load_ts %>% mstl() %>%
+  autoplot()
+
+temp_ts %>% mstl() %>%
+  autoplot()
+```
+
+## Creating test and training datasets 
+```{r}
+#create a subset for training purpose
+n_for = 365
+
+ts_load_train <- subset(load_ts,
+                        end = length(load_ts)-n_for)
+#create a subset for testing purpose
+ts_load_test <- subset(load_ts,
+                        start = length(load_ts)-n_for)
+
+ts_temp_train <- subset(temp_ts,
+                        end = length(temp_ts)-n_for)
+
+ts_temp_test <- subset(temp_ts,
+                       start = length(temp_ts)-n_for)
+
+#ts_temp_test <- ts_temp_test[1:length(load_test)]
+```
+
+```{r}
+#Forecast future temperature values
+h_future <- 59 
+K_temp <- 2
+
+#Fit NN model to forecast temp
+temp_fit_fourier <- nnetar(temp_ts,
+                           p = 7,
+                           P = 1,
+                           xreg = fourier(temp_ts, K = K_temp))
+
+# Or using ARIMA:
+temp_arima_fit_fourier <- auto.arima(temp_ts,
+                                     xreg = fourier(temp_ts, K = K_temp))
+
+# Generate future Fourier terms for temperature (based on the historical temperature series)
+fourier_future_temp <- fourier(temp_ts, K = K_temp, h = h_future)
+
+# Forecast temperature using nnetar
+temp_forecast_fourier_nn <- forecast(temp_fit_fourier,
+                                     h = h_future,
+                                     xreg = fourier_future_temp)
+
+# Forecast temperature using ARIMA
+temp_forecast_fourier_arima <- forecast(temp_arima_fit_fourier,
+                                        h = h_future,
+                                        xreg = fourier_future_temp)
+
+# The forecasted temperature series will be in:
+# temp_forecast_fourier_nn$mean
+# temp_forecast_fourier_arima$mean
+```
+
+Train a NN model with only temperature
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+h_future <- 59
+K=c(2,4)
+
+#Train fourier model on Load
+fourier_train <- fourier(ts_load_train, K = K)
+#Bind temperature training daatset
+train_regressors_with_temp <- cbind(fourier_train, ts_temp_train)
+#Fit NN model on training data of load and temperature
+NN_fit_with_temp_fourier <- nnetar(ts_load_train,
+                                   p = 7,
+                                   P = 1,
+                                   xreg = train_regressors_with_temp)
+
+#Do the same but for forecasted load and temperature
+fourier_future <- fourier(load_ts, K = K, h = h_future)
+future_regressors_with_temp <- cbind(fourier_future, temp_forecast_fourier_nn$mean)
+
+NN_for_with_temp_fourier <- forecast(NN_fit_with_temp_fourier,
+                                      h = h_future,
+                                      xreg = future_regressors_with_temp)
+
+#Look at accuracy scores
+NN_scores <- accuracy(NN_for_with_temp_fourier$mean, ts_load_test)
+NN_scores
+
+#Print out results
+NN_result <- as.data.frame(NN_for_with_temp_fourier$mean)
+print(NN_result)
+```
