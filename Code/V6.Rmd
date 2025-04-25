@@ -144,6 +144,22 @@ ts_temp_test <- subset(temp_ts,
 #ts_temp_test <- ts_temp_test[1:length(load_test)]
 ```
 
+#Train a NN model without temperature
+```{r}
+K = c(2,4)
+for_period = 59
+NN_forecast <- function(ts, p, P, K) {
+  model_fit <- nnetar(ts,
+                      p = p,
+                      P = P,
+                      xreg = fourier(ts, K = K))
+  model_forecast <- forecast(model_fit, h=59, xreg=fourier(ts, K=K, h=for_period))
+}
+forecast_1 <- NN_forecast(load_ts, 1, 0, K)
+NN_result_1 <- as.data.frame(forecast_1$mean)
+```
+
+
 ```{r}
 #Forecast future temperature values
 h_future <- 59 
